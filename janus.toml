@@ -1,0 +1,6 @@
+[irc]
+channels = ["#janus-test"]
+nickname = "janus"
+port = 6669
+server = "acm.umn.edu"
+use_ssl = true

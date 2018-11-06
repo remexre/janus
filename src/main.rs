@@ -1,6 +1,14 @@
+#[macro_use]
+extern crate serde_derive;
+
+mod discord_side;
+mod irc_side;
 mod util;
 
-use failure::Fallible;
+use failure::{format_err, Error, Fallible};
+use futures::{future::Future, sync::mpsc::unbounded, Sink, Stream};
+use irc::client::{data::config::Config as IrcConfig, IrcClient};
+use std::{fs::File, io::Read, path::PathBuf};
 use structopt::StructOpt;
 
 fn main() {
@@ -14,7 +22,66 @@ fn main() {
 
 fn run(opts: Options) -> Fallible<()> {
     opts.start_logger()?;
-    unimplemented!()
+    let config: Config = {
+        let mut file = File::open(opts.config_file)?;
+        let mut data = Vec::new();
+        file.read_to_end(&mut data)?;
+        toml::from_slice(&data)?
+    };
+
+    let (discord_send, discord_send_recv) = unbounded();
+    let (discord_recv_send, discord_recv) = unbounded();
+    let (irc_send, irc_send_recv) = unbounded();
+    let (irc_recv_send, irc_recv) = unbounded();
+
+    //let discord_side = discord_side::start_discord(&opts.discord_token, discord_send, discord_recv);
+    let irc_side = irc_side::start_irc(config.irc.clone(), irc_send, irc_recv);
+    let discord_to_irc = discord_send_recv
+        .map_err(|_| format_err!("Discord hung up?"))
+        .map(|(chan, sender, msg): (u64, String, String)| {
+            config
+                .irc_for_discord(chan)
+                .map(move |chan| (chan, sender.clone(), msg.clone()))
+        })
+        .flatten()
+        .forward(irc_recv_send.sink_map_err(|_| format_err!("Can't send to IRC")))
+        .map(|_| ());
+    let irc_to_discord = irc_send_recv
+        .map_err(|_| format_err!("IRC hung up?"))
+        .map(|(chan, sender, msg)| {
+            config
+                .discord_for_irc(chan)
+                .map(move |chan| (chan, sender.clone(), msg.clone()))
+        })
+        .flatten()
+        .forward(discord_recv_send.sink_map_err(|_| format_err!("Can't send to Discord")))
+        .map(|_| ());
+
+    irc_side
+        .join3(discord_to_irc, irc_to_discord)
+        .wait()
+        .map(|((), (), ())| ())
+}
+
+/// The configuration for a bridge between a Discord server and an IRC server.
+#[derive(Deserialize)]
+pub struct Config {
+    /// IRC configuration.
+    pub irc: IrcConfig,
+}
+
+impl Config {
+    /// Returns the Discord channels that should be sent messages from the named IRC channel.
+    pub fn discord_for_irc(&self, irc: String) -> impl Stream<Item = u64, Error = Error> {
+        unimplemented!();
+        futures::stream::empty()
+    }
+
+    /// Returns the IRC channels that should be sent messages from the named Discord channel.
+    pub fn irc_for_discord(&self, discord: u64) -> impl Stream<Item = String, Error = Error> {
+        unimplemented!();
+        futures::stream::empty()
+    }
 }
 
 #[derive(StructOpt)]
@@ -29,6 +96,20 @@ struct Options {
     /// higher to the console.
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
     verbose: usize,
+
+    /// The config file to read.
+    #[structopt(
+        short = "c",
+        long = "config-file",
+        default_value = "janus.toml",
+        env = "CONFIG_FILE",
+        parse(from_os_str)
+    )]
+    config_file: PathBuf,
+
+    /// The Discord bot token.
+    #[structopt(env = "DISCORD_TOKEN")]
+    discord_token: String,
 
     /// The syslog server to send logs to.
     #[structopt(short = "s", long = "syslog-server", env = "SYSLOG_SERVER")]
