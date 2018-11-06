@@ -1,6 +1,35 @@
 [irc]
-channels = ["#janus-test"]
+channels = ["#coding-horror", "#general", "#meeting-topics-meta", "#next-meeting-topics",
+            "#quotes", "#systems", "#systems-meeting-topics"]
 nickname = "janus"
 port = 6669
 server = "acm.umn.edu"
 use_ssl = true
+
+[[bindings]]
+discord = TODO
+irc = "#coding-horror"
+
+[[bindings]]
+discord = TODO
+irc = "#general"
+
+[[bindings]]
+discord = TODO
+irc = "#meeting-topics-meta"
+
+[[bindings]]
+discord = TODO
+irc = "#next-meeting-topics"
+
+[[bindings]]
+discord = TODO
+irc = "#quotes"
+
+[[bindings]]
+discord = TODO
+irc = "#systems"
+
+[[bindings]]
+discord = TODO
+irc = "#systems-meeting-topics"

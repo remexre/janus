@@ -5,9 +5,13 @@ mod discord_side;
 mod irc_side;
 mod util;
 
-use failure::{format_err, Error, Fallible};
-use futures::{future::Future, sync::mpsc::unbounded, Sink, Stream};
-use irc::client::{data::config::Config as IrcConfig, IrcClient};
+use failure::{format_err, Fallible};
+use futures::{
+    stream::{iter_ok, Stream},
+    sync::mpsc::unbounded,
+    Future, Sink,
+};
+use irc::client::data::config::Config as IrcConfig;
 use std::{fs::File, io::Read, path::PathBuf};
 use structopt::StructOpt;
 
@@ -34,14 +38,17 @@ fn run(opts: Options) -> Fallible<()> {
     let (irc_send, irc_send_recv) = unbounded();
     let (irc_recv_send, irc_recv) = unbounded();
 
-    //let discord_side = discord_side::start_discord(&opts.discord_token, discord_send, discord_recv);
+    let discord_side = discord_side::start_discord(&opts.discord_token, discord_send, discord_recv);
     let irc_side = irc_side::start_irc(config.irc.clone(), irc_send, irc_recv);
     let discord_to_irc = discord_send_recv
         .map_err(|_| format_err!("Discord hung up?"))
         .map(|(chan, sender, msg): (u64, String, String)| {
-            config
-                .irc_for_discord(chan)
-                .map(move |chan| (chan, sender.clone(), msg.clone()))
+            iter_ok(
+                config
+                    .irc_for_discord(chan)
+                    .map(move |chan| (chan, sender.clone(), msg.clone()))
+                    .collect::<Vec<_>>(),
+            )
         })
         .flatten()
         .forward(irc_recv_send.sink_map_err(|_| format_err!("Can't send to IRC")))
@@ -49,18 +56,21 @@ fn run(opts: Options) -> Fallible<()> {
     let irc_to_discord = irc_send_recv
         .map_err(|_| format_err!("IRC hung up?"))
         .map(|(chan, sender, msg)| {
-            config
-                .discord_for_irc(chan)
-                .map(move |chan| (chan, sender.clone(), msg.clone()))
+            iter_ok(
+                config
+                    .discord_for_irc(chan)
+                    .map(move |chan| (chan, sender.clone(), msg.clone()))
+                    .collect::<Vec<_>>(),
+            )
         })
         .flatten()
         .forward(discord_recv_send.sink_map_err(|_| format_err!("Can't send to Discord")))
         .map(|_| ());
 
-    irc_side
-        .join3(discord_to_irc, irc_to_discord)
+    discord_side
+        .join4(irc_side, discord_to_irc, irc_to_discord)
         .wait()
-        .map(|((), (), ())| ())
+        .map(|((), (), (), ())| ())
 }
 
 /// The configuration for a bridge between a Discord server and an IRC server.
@@ -68,20 +78,36 @@ fn run(opts: Options) -> Fallible<()> {
 pub struct Config {
     /// IRC configuration.
     pub irc: IrcConfig,
+
+    /// Bindings between two channels.
+    pub bindings: Vec<Binding>,
 }
 
 impl Config {
     /// Returns the Discord channels that should be sent messages from the named IRC channel.
-    pub fn discord_for_irc(&self, irc: String) -> impl Stream<Item = u64, Error = Error> {
-        unimplemented!();
-        futures::stream::empty()
+    pub fn discord_for_irc<'a>(&'a self, irc: String) -> impl 'a + Iterator<Item = u64> {
+        self.bindings
+            .iter()
+            .filter(move |b| b.irc == irc)
+            .map(|b| b.discord)
     }
 
     /// Returns the IRC channels that should be sent messages from the named Discord channel.
-    pub fn irc_for_discord(&self, discord: u64) -> impl Stream<Item = String, Error = Error> {
-        unimplemented!();
-        futures::stream::empty()
+    pub fn irc_for_discord<'a>(&'a self, discord: u64) -> impl 'a + Iterator<Item = String> {
+        self.bindings
+            .iter()
+            .filter(move |b| b.discord == discord)
+            .map(|b| b.irc.clone())
     }
+}
+
+#[derive(Deserialize)]
+pub struct Binding {
+    /// The Discord channel ID.
+    pub discord: u64,
+
+    /// The IRC channel name.
+    pub irc: String,
 }
 
 #[derive(StructOpt)]
