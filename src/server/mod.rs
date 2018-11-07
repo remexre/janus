@@ -22,7 +22,7 @@ pub fn run(discord_token: &str) -> impl Future<Item = (), Error = Error> {
     let discord_to_irc = discord_send_recv
         .map_err(|_| format_err!("Discord hung up?"))
         .map(|(chan, sender, msg): (u64, String, String)| {
-            let msg = Arc::new(format!("{}: {}", sender, msg));
+            let msg = Arc::new(format_discord_for_irc(sender, msg));
             iter_ok(
                 Config::irc_for_discord(chan)
                     .into_iter()
@@ -36,7 +36,7 @@ pub fn run(discord_token: &str) -> impl Future<Item = (), Error = Error> {
     let irc_to_discord = irc_send_recv
         .map_err(|_| format_err!("IRC hung up?"))
         .map(|(chan, sender, msg)| {
-            let msg = Arc::new(format!("__**{}**__: {}", sender, msg));
+            let msg = Arc::new(format_irc_for_discord(sender, msg));
             iter_ok(Config::discord_for_irc(chan)).map(move |chan| (chan, msg.clone()))
         })
         .flatten()
@@ -46,4 +46,12 @@ pub fn run(discord_token: &str) -> impl Future<Item = (), Error = Error> {
     discord_side
         .join4(irc_side, discord_to_irc, irc_to_discord)
         .map(|((), (), (), ())| ())
+}
+
+fn format_discord_for_irc(sender: String, msg: String) -> String {
+    format!("{}: {}", sender, msg)
+}
+
+fn format_irc_for_discord(sender: String, msg: String) -> String {
+    format!("__**{}**__: {}", sender, msg)
 }
