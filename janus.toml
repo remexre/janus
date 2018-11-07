@@ -1,4 +1,5 @@
 [irc]
+alt_nicks = ["janus_", "janus__"]
 nickname = "janus"
 port = 6669
 server = "acm.umn.edu"

@@ -135,7 +135,7 @@ impl Options {
             let formatter = syslog::Formatter3164 {
                 facility: syslog::Facility::LOG_DAEMON,
                 hostname: hostname::get_hostname(),
-                process: "thetis".to_owned(),
+                process: "janus".to_owned(),
                 pid: ::std::process::id() as i32,
             };
 
