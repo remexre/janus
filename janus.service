@@ -3,7 +3,7 @@ Description=Janus
 
 [Service]
 WorkingDirectory=/opt/janus
-ExecStart=/opt/janus/janus
+ExecStart=/opt/janus/janus run
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 
