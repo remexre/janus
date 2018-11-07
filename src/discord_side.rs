@@ -10,9 +10,13 @@ use futures::{
 use log::error;
 use serenity::{
     client::{Client, Context, EventHandler},
-    model::{channel::Message, id::ChannelId},
+    model::{
+        channel::Message,
+        gateway::Ready,
+        id::{ChannelId, UserId},
+    },
 };
-use std::thread::spawn;
+use std::{sync::RwLock, thread::spawn};
 
 /// Starts listening for Discord messages, communicating over the given channels.
 pub fn start_discord(
@@ -20,7 +24,7 @@ pub fn start_discord(
     discord_send: UnboundedSender<(u64, String, String)>,
     discord_recv: UnboundedReceiver<(u64, String, String)>,
 ) -> impl Future<Item = (), Error = Error> {
-    match Client::new(discord_token, Handler(discord_send)) {
+    match Client::new(discord_token, Handler(discord_send, RwLock::new(UserId(0)))) {
         Ok(mut discord) => {
             let (end_send, end_recv) = channel();
             spawn(move || {
@@ -56,11 +60,15 @@ pub fn start_discord(
     }
 }
 
-struct Handler(UnboundedSender<(u64, String, String)>);
+struct Handler(UnboundedSender<(u64, String, String)>, RwLock<UserId>);
 
 impl EventHandler for Handler {
+    fn ready(&self, _ctx: Context, ready: Ready) {
+        *self.1.write().unwrap() = ready.user.id;
+    }
+
     fn message(&self, ctx: Context, msg: Message) {
-        if msg.author.bot {
+        if msg.author.id == *self.1.read().unwrap() {
             return;
         }
 

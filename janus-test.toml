@@ -1,0 +1,10 @@
+[irc]
+alt_nicks = ["janus-test_", "janus-test__"]
+nickname = "janus-test"
+port = 6669
+server = "acm.umn.edu"
+use_ssl = true
+
+[[bindings]]
+discord = 509597195566317570
+irc = "#janus-test"
