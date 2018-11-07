@@ -6,5 +6,5 @@ server = "acm.umn.edu"
 use_ssl = true
 
 [[bindings]]
-discord = 509597195566317570
+discord = 509597195566317570 # https://discord.gg/RYjDWm7
 irc = "#janus-test"
