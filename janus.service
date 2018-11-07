@@ -1,0 +1,11 @@
+[Unit]
+Description=Janus
+
+[Service]
+WorkingDirectory=/opt/janus
+ExecStart=/opt/janus/janus
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

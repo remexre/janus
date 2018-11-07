@@ -25,7 +25,7 @@ fn main() {
 
 fn run(opts: Options) -> Fallible<()> {
     opts.start_logger()?;
-    config::Config::init(&opts.config_file)?;
+    config::Config::init(opts.config_file)?;
 
     let fut = match opts.subcommand {
         Subcommand::ListChannels { as_bindings } => Either::A(

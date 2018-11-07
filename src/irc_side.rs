@@ -35,15 +35,19 @@ pub fn start_irc(
                     _ => Ok(()),
                 }
             });
+            let send_client = client.clone();
             let send_fut =
                 irc_recv
                     .map_err(|()| unreachable!())
                     .for_each(move |(chan, sender, msg)| {
-                        client
+                        send_client
                             .send_privmsg(chan, format!("{}: {}", sender, msg))
                             .map_err(Error::from)
                     });
-            Either::A(recv_fut.join(send_fut).map(|((), ())| ()))
+            let update = Config::notify_on_reload()
+                .map_err(|()| unreachable!())
+                .for_each(move |()| ensure_joined(&client));
+            Either::A(update.join3(recv_fut, send_fut).map(|((), (), ())| ()))
         }
         Err(e) => Either::B(err(Error::from(e))),
     }

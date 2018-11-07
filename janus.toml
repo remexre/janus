@@ -4,34 +4,34 @@ port = 6669
 server = "acm.umn.edu"
 use_ssl = true
 
-# [[bindings]]
-# discord = TODO
-# irc = "#coding-horror"
-
 [[bindings]]
 discord = 500774262588571649
 irc = "#club-systems"
 
 [[bindings]]
+discord = 411009992758525952
+irc = "#coding-horror"
+
+[[bindings]]
 discord = 407671898672070659
 irc = "#discord-general"
 
-# [[bindings]]
-# discord = TODO
-# irc = "#meeting-topics-meta"
+[[bindings]]
+discord = 493946739980632064
+irc = "#meeting-topics-meta"
 
-# [[bindings]]
-# discord = TODO
-# irc = "#next-meeting-topics"
+[[bindings]]
+discord = 408090597812076554
+irc = "#next-meeting-topics"
 
-# [[bindings]]
-# discord = TODO
-# irc = "#quotes"
+[[bindings]]
+discord = 407672742322634772
+irc = "#quotes"
 
-# [[bindings]]
-# discord = TODO
-# irc = "#systems"
+[[bindings]]
+discord = 408092323272982529
+irc = "#systems"
 
-# [[bindings]]
-# discord = TODO
-# irc = "#systems-meeting-topics"
+[[bindings]]
+discord = 493941891801284619
+irc = "#systems-meeting-topics"
