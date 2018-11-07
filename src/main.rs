@@ -1,16 +1,13 @@
 #[macro_use]
 extern crate serde_derive;
 
-mod commands;
 mod config;
-mod discord_side;
-mod irc_side;
-#[cfg(feature = "signals")]
-mod signals;
-mod util;
+mod list_channels;
+mod server;
 
 use failure::{Error, Fallible};
 use futures::future::{Either, Future};
+use log::error;
 use std::{collections::HashSet, path::PathBuf};
 use structopt::StructOpt;
 
@@ -18,7 +15,7 @@ fn main() {
     dotenv::dotenv().ok();
     let opts = Options::from_args();
     if let Err(err) = run(opts) {
-        util::log_err(err);
+        log_err(err);
         std::process::exit(1);
     }
 }
@@ -29,7 +26,7 @@ fn run(opts: Options) -> Fallible<()> {
 
     let fut = match opts.subcommand {
         Subcommand::ListChannels { as_bindings } => Either::A(
-            commands::list_channels(&opts.discord_token).and_then(move |chans| {
+            list_channels::run(&opts.discord_token).and_then(move |chans| {
                 if as_bindings {
                     use crate::config::Binding;
 
@@ -63,7 +60,7 @@ fn run(opts: Options) -> Fallible<()> {
                 }
             }),
         ),
-        Subcommand::Run => Either::B(commands::run(&opts.discord_token)),
+        Subcommand::Run => Either::B(server::run(&opts.discord_token)),
     };
     // TODO: Use a real runtime.
     fut.wait()
@@ -173,4 +170,26 @@ enum Subcommand {
     /// Starts Janus.
     #[structopt(name = "run")]
     Run,
+}
+
+/// Logs an error, including its causes and backtrace (if possible).
+pub fn log_err(err: failure::Error) {
+    let mut first = true;
+    let num_errs = err.iter_chain().count();
+    if num_errs <= 1 {
+        error!("{}", err);
+    } else {
+        for cause in err.iter_chain() {
+            if first {
+                first = false;
+                error!("           {}", cause);
+            } else {
+                error!("caused by: {}", cause);
+            }
+        }
+    }
+    let bt = err.backtrace().to_string();
+    if bt != "" {
+        error!("{}", bt);
+    }
 }

@@ -34,7 +34,7 @@ pub struct Channels {
     pub discord: HashMap<String, Vec<(String, u64)>>,
 }
 
-pub fn list_channels(discord_token: &str) -> impl Future<Item = Channels, Error = Error> {
+pub fn run(discord_token: &str) -> impl Future<Item = Channels, Error = Error> {
     get_irc_channels()
         .join(get_discord_channels(discord_token))
         .map(|(irc, discord)| Channels { irc, discord })

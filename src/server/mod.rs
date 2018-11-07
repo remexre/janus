@@ -1,10 +1,15 @@
-use crate::{config::Config, discord_side::start_discord, irc_side::start_irc};
+mod discord_side;
+mod irc_side;
+
+use self::{discord_side::start_discord, irc_side::start_irc};
+use crate::config::Config;
 use failure::{format_err, Error};
 use futures::{
     stream::{iter_ok, Stream},
     sync::mpsc::unbounded,
     Future, Sink,
 };
+use std::sync::Arc;
 
 pub fn run(discord_token: &str) -> impl Future<Item = (), Error = Error> {
     let (discord_send, discord_send_recv) = unbounded();
@@ -17,10 +22,11 @@ pub fn run(discord_token: &str) -> impl Future<Item = (), Error = Error> {
     let discord_to_irc = discord_send_recv
         .map_err(|_| format_err!("Discord hung up?"))
         .map(|(chan, sender, msg): (u64, String, String)| {
+            let msg = Arc::new(format!("{}: {}", sender, msg));
             iter_ok(
                 Config::irc_for_discord(chan)
                     .into_iter()
-                    .map(move |chan| (chan, sender.clone(), msg.clone()))
+                    .map(move |chan| (chan, msg.clone()))
                     .collect::<Vec<_>>(),
             )
         })
@@ -30,8 +36,8 @@ pub fn run(discord_token: &str) -> impl Future<Item = (), Error = Error> {
     let irc_to_discord = irc_send_recv
         .map_err(|_| format_err!("IRC hung up?"))
         .map(|(chan, sender, msg)| {
-            iter_ok(Config::discord_for_irc(chan))
-                .map(move |chan| (chan, sender.clone(), msg.clone()))
+            let msg = Arc::new(format!("__**{}**__: {}", sender, msg));
+            iter_ok(Config::discord_for_irc(chan)).map(move |chan| (chan, msg.clone()))
         })
         .flatten()
         .forward(discord_recv_send.sink_map_err(|_| format_err!("Can't send to Discord")))

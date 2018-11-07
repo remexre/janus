@@ -16,13 +16,16 @@ use serenity::{
         id::{ChannelId, UserId},
     },
 };
-use std::{sync::RwLock, thread::spawn};
+use std::{
+    sync::{Arc, RwLock},
+    thread::spawn,
+};
 
 /// Starts listening for Discord messages, communicating over the given channels.
 pub fn start_discord(
     discord_token: &str,
     discord_send: UnboundedSender<(u64, String, String)>,
-    discord_recv: UnboundedReceiver<(u64, String, String)>,
+    discord_recv: UnboundedReceiver<(u64, Arc<String>)>,
 ) -> impl Future<Item = (), Error = Error> {
     match Client::new(discord_token, Handler(discord_send, RwLock::new(UserId(0)))) {
         Ok(mut discord) => {
@@ -40,8 +43,8 @@ pub fn start_discord(
             Either::A(
                 discord_recv
                     .map_err(|()| unreachable!())
-                    .for_each(|(chan, sender, msg)| {
-                        match ChannelId(chan).say(format!("{}: {}", sender, msg)) {
+                    .for_each(|(chan, msg)| {
+                        match ChannelId(chan).say(msg) {
                             Ok(_) => {}
                             Err(err) => {
                                 error!("{}", err);

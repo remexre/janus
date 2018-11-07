@@ -9,13 +9,13 @@ use irc::{
     client::{data::config::Config as IrcConfig, ext::ClientExt, Client, IrcClient},
     proto::{command::Command, response::Response},
 };
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
 /// Starts listening for IRC messages, communicating over the given channels.
 pub fn start_irc(
     config: IrcConfig,
     irc_send: UnboundedSender<(String, String, String)>,
-    irc_recv: UnboundedReceiver<(String, String, String)>,
+    irc_recv: UnboundedReceiver<(String, Arc<String>)>,
 ) -> impl Future<Item = (), Error = Error> {
     match IrcClient::from_config(config) {
         Ok(client) => {
@@ -36,14 +36,11 @@ pub fn start_irc(
                 }
             });
             let send_client = client.clone();
-            let send_fut =
-                irc_recv
-                    .map_err(|()| unreachable!())
-                    .for_each(move |(chan, sender, msg)| {
-                        send_client
-                            .send_privmsg(chan, format!("{}: {}", sender, msg))
-                            .map_err(Error::from)
-                    });
+            let send_fut = irc_recv
+                .map_err(|()| unreachable!())
+                .for_each(move |(chan, msg)| {
+                    send_client.send_privmsg(chan, msg).map_err(Error::from)
+                });
             let update = Config::notify_on_reload()
                 .map_err(|()| unreachable!())
                 .for_each(move |()| ensure_joined(&client));

@@ -1,3 +1,6 @@
+#[cfg(feature = "signals")]
+mod signals;
+
 use failure::Fallible;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use irc::client::data::config::Config as IrcConfig;
@@ -48,12 +51,12 @@ impl Config {
         #[cfg(feature = "signals")]
         {
             let (send, recv) = std::sync::mpsc::channel();
-            unsafe { crate::signals::add_sighup_handler(send)? };
+            unsafe { self::signals::add_sighup_handler(send)? };
             std::thread::spawn(move || {
                 while let Ok(()) = recv.recv() {
                     warn!("Reloading config...");
                     if let Err(e) = Config::reload_from(&path) {
-                        crate::util::log_err(e)
+                        crate::log_err(e)
                     }
                 }
             });
