@@ -46,6 +46,7 @@ fn run(opts: Options) -> Fallible<()> {
                                 Some(Binding {
                                     irc: irc_name,
                                     discord: id,
+                                    direction: None,
                                 })
                             } else {
                                 None

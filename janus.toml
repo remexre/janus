@@ -18,6 +18,10 @@ discord = 407671898672070659
 irc = "#discord-general"
 
 [[bindings]]
+discord = 408777904537731105
+irc = "#food"
+
+[[bindings]]
 discord = 493946739980632064
 irc = "#meeting-topics-meta"
 

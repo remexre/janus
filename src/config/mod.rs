@@ -40,6 +40,7 @@ impl Config {
             .bindings
             .iter()
             .filter(move |b| b.irc == irc)
+            .filter(|b| b.direction != Some(Direction::Irc))
             .map(|b| b.discord)
             .collect()
     }
@@ -89,6 +90,7 @@ impl Config {
             .bindings
             .iter()
             .filter(move |b| b.discord == discord)
+            .filter(|b| b.direction != Some(Direction::Discord))
             .map(|b| b.irc.clone())
             .collect()
     }
@@ -139,4 +141,17 @@ pub struct Binding {
 
     /// The IRC channel name.
     pub irc: String,
+
+    /// The direction to send messages.
+    pub direction: Option<Direction>,
+}
+
+#[derive(Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Direction {
+    /// Send only from IRC to Discord.
+    Discord,
+
+    /// Send only from Discord to IRC.
+    Irc,
 }

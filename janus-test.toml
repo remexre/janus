@@ -5,6 +5,18 @@ port = 6669
 server = "acm.umn.edu"
 use_ssl = true
 
+# These channels are all on https://discord.gg/RYjDWm7
+
 [[bindings]]
-discord = 509597195566317570 # https://discord.gg/RYjDWm7
+discord = 509597195566317570 # general
 irc = "#janus-test"
+
+[[bindings]]
+discord = 509605562099433487 # recv-only
+irc = "#janus-test"
+direction = "discord"
+
+[[bindings]]
+discord = 509605576553005066 # send-only
+irc = "#janus-test"
+direction = "irc"
