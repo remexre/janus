@@ -12,12 +12,19 @@ futures = "0.1.25"
 hostname = "0.1.5"
 irc = "0.13.6"
 log = "0.4.6"
+nix = { version = "0.11.0", optional = true }
 serde = "1.0.80"
 serde_derive = "1.0.80"
 serenity = "0.5.10"
 structopt = "0.2.13"
 syslog = "4.0.1"
 toml = "0.4.8"
+lazy_static = "1.2.0"
+serde_json = "1.0.32"
+
+[features]
+default = ["signals"]
+signals = ["nix"]
 
 [patch.crates-io]
 openssl = { git = "https://github.com/ishitatsuyuki/rust-openssl", branch = "0.9.x" }

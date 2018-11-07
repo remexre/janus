@@ -1,18 +1,17 @@
 #[macro_use]
 extern crate serde_derive;
 
+mod commands;
+mod config;
 mod discord_side;
 mod irc_side;
+#[cfg(feature = "signals")]
+mod signals;
 mod util;
 
-use failure::{format_err, Fallible};
-use futures::{
-    stream::{iter_ok, Stream},
-    sync::mpsc::unbounded,
-    Future, Sink,
-};
-use irc::client::data::config::Config as IrcConfig;
-use std::{fs::File, io::Read, path::PathBuf};
+use failure::{Error, Fallible};
+use futures::future::{Either, Future};
+use std::{collections::HashSet, path::PathBuf};
 use structopt::StructOpt;
 
 fn main() {
@@ -26,88 +25,48 @@ fn main() {
 
 fn run(opts: Options) -> Fallible<()> {
     opts.start_logger()?;
-    let config: Config = {
-        let mut file = File::open(opts.config_file)?;
-        let mut data = Vec::new();
-        file.read_to_end(&mut data)?;
-        toml::from_slice(&data)?
+    config::Config::init(&opts.config_file)?;
+
+    let fut = match opts.subcommand {
+        Subcommand::ListChannels { as_bindings } => Either::A(
+            commands::list_channels(&opts.discord_token).and_then(move |chans| {
+                if as_bindings {
+                    use crate::config::Binding;
+
+                    #[derive(Serialize)]
+                    struct Wrapper {
+                        bindings: Vec<Binding>,
+                    }
+
+                    let irc_channels = chans.irc.into_iter().collect::<HashSet<String>>();
+                    let bindings = chans
+                        .discord
+                        .values()
+                        .flatten()
+                        .filter_map(|&(ref name, id)| {
+                            let irc_name = format!("#{}", name);
+                            if irc_channels.contains(&irc_name) {
+                                Some(Binding {
+                                    irc: irc_name,
+                                    discord: id,
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    let bindings = toml::to_string_pretty(&Wrapper { bindings })?;
+                    println!("{}", bindings);
+                    Ok(())
+                } else {
+                    serde_json::to_writer_pretty(std::io::stdout(), &chans).map_err(Error::from)
+                }
+            }),
+        ),
+        Subcommand::Run => Either::B(commands::run(&opts.discord_token)),
     };
-
-    let (discord_send, discord_send_recv) = unbounded();
-    let (discord_recv_send, discord_recv) = unbounded();
-    let (irc_send, irc_send_recv) = unbounded();
-    let (irc_recv_send, irc_recv) = unbounded();
-
-    let discord_side = discord_side::start_discord(&opts.discord_token, discord_send, discord_recv);
-    let irc_side = irc_side::start_irc(config.irc.clone(), irc_send, irc_recv);
-    let discord_to_irc = discord_send_recv
-        .map_err(|_| format_err!("Discord hung up?"))
-        .map(|(chan, sender, msg): (u64, String, String)| {
-            iter_ok(
-                config
-                    .irc_for_discord(chan)
-                    .map(move |chan| (chan, sender.clone(), msg.clone()))
-                    .collect::<Vec<_>>(),
-            )
-        })
-        .flatten()
-        .forward(irc_recv_send.sink_map_err(|_| format_err!("Can't send to IRC")))
-        .map(|_| ());
-    let irc_to_discord = irc_send_recv
-        .map_err(|_| format_err!("IRC hung up?"))
-        .map(|(chan, sender, msg)| {
-            iter_ok(
-                config
-                    .discord_for_irc(chan)
-                    .map(move |chan| (chan, sender.clone(), msg.clone()))
-                    .collect::<Vec<_>>(),
-            )
-        })
-        .flatten()
-        .forward(discord_recv_send.sink_map_err(|_| format_err!("Can't send to Discord")))
-        .map(|_| ());
-
-    discord_side
-        .join4(irc_side, discord_to_irc, irc_to_discord)
-        .wait()
-        .map(|((), (), (), ())| ())
-}
-
-/// The configuration for a bridge between a Discord server and an IRC server.
-#[derive(Deserialize)]
-pub struct Config {
-    /// IRC configuration.
-    pub irc: IrcConfig,
-
-    /// Bindings between two channels.
-    pub bindings: Vec<Binding>,
-}
-
-impl Config {
-    /// Returns the Discord channels that should be sent messages from the named IRC channel.
-    pub fn discord_for_irc<'a>(&'a self, irc: String) -> impl 'a + Iterator<Item = u64> {
-        self.bindings
-            .iter()
-            .filter(move |b| b.irc == irc)
-            .map(|b| b.discord)
-    }
-
-    /// Returns the IRC channels that should be sent messages from the named Discord channel.
-    pub fn irc_for_discord<'a>(&'a self, discord: u64) -> impl 'a + Iterator<Item = String> {
-        self.bindings
-            .iter()
-            .filter(move |b| b.discord == discord)
-            .map(|b| b.irc.clone())
-    }
-}
-
-#[derive(Deserialize)]
-pub struct Binding {
-    /// The Discord channel ID.
-    pub discord: u64,
-
-    /// The IRC channel name.
-    pub irc: String,
+    // TODO: Use a real runtime.
+    fut.wait()
 }
 
 #[derive(StructOpt)]
@@ -116,12 +75,20 @@ struct Options {
     /// Turns off message output. Passing once prevents logging to syslog. Passing twice or more
     /// disables all logging.
     #[structopt(short = "q", long = "quiet", parse(from_occurrences))]
-    quiet: usize,
+    pub quiet: usize,
 
     /// Increases the verbosity. Default verbosity is warnings and higher to syslog, info and
     /// higher to the console.
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
-    verbose: usize,
+    pub verbose: usize,
+
+    /// The Discord bot token.
+    #[structopt(env = "DISCORD_TOKEN")]
+    pub discord_token: String,
+
+    /// The syslog server to send logs to.
+    #[structopt(short = "s", long = "syslog-server", env = "SYSLOG_SERVER")]
+    pub syslog_server: Option<String>,
 
     /// The config file to read.
     #[structopt(
@@ -133,13 +100,9 @@ struct Options {
     )]
     config_file: PathBuf,
 
-    /// The Discord bot token.
-    #[structopt(env = "DISCORD_TOKEN")]
-    discord_token: String,
-
-    /// The syslog server to send logs to.
-    #[structopt(short = "s", long = "syslog-server", env = "SYSLOG_SERVER")]
-    syslog_server: Option<String>,
+    /// The subcommand to run.
+    #[structopt(subcommand)]
+    pub subcommand: Subcommand,
 }
 
 impl Options {
@@ -195,4 +158,19 @@ impl Options {
         fern.apply()?;
         Ok(())
     }
+}
+
+#[derive(StructOpt)]
+enum Subcommand {
+    /// Lists the channels available.
+    #[structopt(name = "list")]
+    ListChannels {
+        /// Whether to output in the form of bindings sections or not.
+        #[structopt(long = "as-bindings")]
+        as_bindings: bool,
+    },
+
+    /// Starts Janus.
+    #[structopt(name = "run")]
+    Run,
 }
