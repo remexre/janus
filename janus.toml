@@ -6,6 +6,10 @@ server = "acm.umn.edu"
 use_ssl = true
 
 [[bindings]]
+discord = 408078847536529418
+irc = "#brass-class"
+
+[[bindings]]
 discord = 500774262588571649
 irc = "#club-systems"
 
@@ -32,6 +36,10 @@ irc = "#next-meeting-topics"
 [[bindings]]
 discord = 407672742322634772
 irc = "#quotes"
+
+[[bindings]]
+discord = 407672314876919809
+irc = "#shitposting"
 
 [[bindings]]
 discord = 408092323272982529
