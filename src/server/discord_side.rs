@@ -17,6 +17,7 @@ use serenity::{
     },
 };
 use std::{
+    iter::once,
     sync::{Arc, RwLock},
     thread::spawn,
 };
@@ -75,12 +76,19 @@ impl EventHandler for Handler {
             return;
         }
 
-        if let Err(err) = self
-            .0
-            .unbounded_send((msg.channel_id.0, msg.author.name, msg.content))
-        {
-            error!("{}", err);
-            ctx.quit();
+        let chan_id = msg.channel_id.0;
+        let author = msg.author.name;
+        let iter = once((chan_id, author.clone(), msg.content)).chain(
+            msg.attachments
+                .iter()
+                .map(|a| (chan_id, author.clone(), a.url.clone())),
+        );
+        for data in iter {
+            if let Err(err) = self.0.unbounded_send(data) {
+                error!("{}", err);
+                ctx.quit();
+                break;
+            }
         }
     }
 }

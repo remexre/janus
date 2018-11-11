@@ -1,3 +1,4 @@
+mod discord_parser;
 mod discord_side;
 mod irc_side;
 
@@ -21,7 +22,7 @@ pub fn run(discord_token: &str) -> impl Future<Item = (), Error = Error> {
     let irc_side = start_irc(Config::irc_config(), irc_send, irc_recv);
     let discord_to_irc = discord_send_recv
         .map_err(|_| format_err!("Discord hung up?"))
-        .map(|(chan, sender, msg): (u64, String, String)| {
+        .map(|(chan, sender, msg)| {
             let msg = Arc::new(format_discord_for_irc(sender, msg));
             iter_ok(
                 Config::irc_for_discord(chan)
