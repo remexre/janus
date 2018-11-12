@@ -40,18 +40,20 @@ pub fn start_irc(
             let send_fut = irc_recv
                 .map_err(|()| unreachable!())
                 .for_each(move |(chan, msg)| {
-                    let mut msg: &str = &msg;
-                    while !msg.is_empty() {
-                        let n = msg
-                            .grapheme_indices(true)
-                            .map(|(n, _)| n)
-                            .take_while(|&n| n < 400)
-                            .last()
-                            .unwrap();
-                        send_client
-                            .send_privmsg(chan.clone(), &msg[..n])
-                            .map_err(Error::from)?;
-                        msg = &msg[n..];
+                    for mut msg in msg.split('\n') {
+                        while !msg.is_empty() {
+                            let n = msg
+                                .grapheme_indices(true)
+                                .map(|(n, _)| n)
+                                .take_while(|&n| n < 400)
+                                .last()
+                                .unwrap();
+                            println!("{:?}", (n, msg));
+                            send_client
+                                .send_privmsg(chan.clone(), &msg[..n])
+                                .map_err(Error::from)?;
+                            msg = &msg[n..];
+                        }
                     }
                     Ok(())
                 });
