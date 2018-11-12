@@ -21,6 +21,7 @@ syslog = "4.0.1"
 toml = "0.4.8"
 lazy_static = "1.2.0"
 serde_json = "1.0.32"
+unicode-segmentation = "1.2.1"
 
 [features]
 default = ["signals"]

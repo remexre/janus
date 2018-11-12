@@ -10,6 +10,7 @@ use irc::{
     proto::{command::Command, response::Response},
 };
 use std::{collections::HashSet, sync::Arc};
+use unicode_segmentation::UnicodeSegmentation;
 
 /// Starts listening for IRC messages, communicating over the given channels.
 pub fn start_irc(
@@ -36,11 +37,24 @@ pub fn start_irc(
                 }
             });
             let send_client = client.clone();
-            let send_fut = irc_recv
-                .map_err(|()| unreachable!())
-                .for_each(move |(chan, msg)| {
-                    send_client.send_privmsg(chan, msg).map_err(Error::from)
-                });
+            let send_fut =
+                irc_recv
+                    .map_err(|()| unreachable!())
+                    .for_each(move |(chan, mut msg)| {
+                        while !msg.is_empty() {
+                            let n = msg
+                                .grapheme_indices(true)
+                                .map(|(n, _)| n)
+                                .take_while(|n| n < 400)
+                                .last()
+                                .unwrap();
+                            send_client
+                                .send_privmsg(chan, msg[..n])
+                                .map_err(Error::from)?;
+                            msg = msg[n..];
+                        }
+                        Ok(())
+                    });
             let update = Config::notify_on_reload()
                 .map_err(|()| unreachable!())
                 .for_each(move |()| ensure_joined(&client));
