@@ -44,7 +44,7 @@ pub fn start_irc(
                         while !msg.is_empty() {
                             let n = msg
                                 .grapheme_indices(true)
-                                .map(|(n, _)| n)
+                                .map(|(n, s)| n + s.len())
                                 .take_while(|&n| n < 400)
                                 .last()
                                 .unwrap();
