@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::model::channel::Message;
 
-use super::discord_side::ID_TO_NICK;
+use crate::server::discord_side::ID_TO_NICK;
 
 lazy_static! {
     static ref MENTION_PATTERN: Regex = Regex::new(r"<@!?(?P<id>[0-9]+)>").unwrap();
@@ -12,10 +12,8 @@ lazy_static! {
 fn find_nickname(id: &u64, message: &Message) -> Option<String> {
     for user in &message.mentions {
         if *user.id.as_u64() == *id {
-            {
-                let mut map = ID_TO_NICK.write();
-                map.insert(*id, user.name.clone());
-            }
+            let mut map = ID_TO_NICK.write();
+            map.insert(*id, user.name.clone());
             return Some(format!("@{}", user.name));
         }
     }
